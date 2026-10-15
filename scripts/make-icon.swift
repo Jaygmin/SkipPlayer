@@ -11,11 +11,21 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
             blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
 }
 
-func gradient(_ colors: [CGColor]) -> CGGradient {
-    CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: colors as CFArray, locations: nil)!
-}
-
 func radians(_ degrees: CGFloat) -> CGFloat { degrees * .pi / 180 }
+
+/// Apple 아이콘처럼 모서리가 연속적으로 휘는 superellipse.
+func squircle(_ rect: CGRect, exponent n: CGFloat = 5) -> CGPath {
+    let path = CGMutablePath()
+    let steps = 720
+    for i in 0..<steps {
+        let t = CGFloat(i) / CGFloat(steps) * 2 * .pi
+        let x = rect.midX + rect.width / 2 * copysign(pow(abs(cos(t)), 2 / n), cos(t))
+        let y = rect.midY + rect.height / 2 * copysign(pow(abs(sin(t)), 2 / n), sin(t))
+        i == 0 ? path.move(to: CGPoint(x: x, y: y)) : path.addLine(to: CGPoint(x: x, y: y))
+    }
+    path.closeSubpath()
+    return path
+}
 
 func roundedPolygon(_ points: [CGPoint], radius: CGFloat) -> CGPath {
     let path = CGMutablePath()
@@ -29,91 +39,63 @@ func roundedPolygon(_ points: [CGPoint], radius: CGFloat) -> CGPath {
 }
 
 /// 1024pt 좌표계(y축 위쪽)에서 그린 뒤 px 크기로 렌더링한다.
+/// 흰 배경 + 검은 재생 삼각형 + 파란 스킵 링(↻), 모두 정중앙 정렬.
 func render(_ px: Int) -> CGImage {
     let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
                         space: CGColorSpace(name: CGColorSpace.sRGB)!,
                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
     ctx.scaleBy(x: CGFloat(px) / 1024, y: CGFloat(px) / 1024)
     let center = CGPoint(x: 512, y: 512)
-    let white = color(0xFFFFFF, 0.96)
 
-    // 본체: macOS 아이콘 격자(824pt 둥근 사각형, 여백 100pt) + 그림자
+    // 본체: macOS 아이콘 격자(824pt, 여백 100pt) + 옅은 그림자, 흰색 → 옅은 회색 세로 그라데이션
     let body = CGRect(x: 100, y: 100, width: 824, height: 824)
-    let bodyPath = CGPath(roundedRect: body, cornerWidth: 185, cornerHeight: 185, transform: nil)
+    let bodyPath = squircle(body)
     ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: color(0x000000, 0.35))
+    ctx.setShadow(offset: CGSize(width: 0, height: -8), blur: 24, color: color(0x000000, 0.22))
     ctx.addPath(bodyPath)
-    ctx.setFillColor(color(0x1B1464))
+    ctx.setFillColor(color(0xE9E9EE))
     ctx.fillPath()
     ctx.restoreGState()
-
-    // 배경: 남색 → 보라 대각선, 오른쪽 아래 주황 빛, 위쪽 은은한 광택
     ctx.saveGState()
     ctx.addPath(bodyPath)
     ctx.clip()
-    ctx.drawLinearGradient(gradient([color(0x1B1464), color(0x6D28D9)]),
-                           start: CGPoint(x: 100, y: 924), end: CGPoint(x: 924, y: 100), options: [])
-    let glowCenter = CGPoint(x: 860, y: 160)
-    ctx.drawRadialGradient(gradient([color(0xF97316, 0.65), color(0xF97316, 0)]),
-                           startCenter: glowCenter, startRadius: 0, endCenter: glowCenter, endRadius: 560, options: [])
-    ctx.drawLinearGradient(gradient([color(0xFFFFFF, 0.14), color(0xFFFFFF, 0)]),
-                           start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 560), options: [])
+    let background = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+                                colors: [color(0xFFFFFF), color(0xE9E9EE)] as CFArray, locations: nil)!
+    ctx.drawLinearGradient(background, start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 100), options: [])
     ctx.restoreGState()
-    ctx.addPath(CGPath(roundedRect: body.insetBy(dx: 2, dy: 2), cornerWidth: 183, cornerHeight: 183, transform: nil))
-    ctx.setStrokeColor(color(0xFFFFFF, 0.10))
-    ctx.setLineWidth(4)
+    ctx.addPath(squircle(body.insetBy(dx: 1.5, dy: 1.5)))
+    ctx.setStrokeColor(color(0x000000, 0.06))
+    ctx.setLineWidth(3)
     ctx.strokePath()
 
-    // 스킵 화살표: 왼쪽 ↺(뒤로), 오른쪽 ↻(앞으로). 화살촉은 아래쪽에서 마주 본다.
-    let ringRadius: CGFloat = 300
-    func ringPoint(_ degrees: CGFloat) -> CGPoint {
-        CGPoint(x: center.x + ringRadius * cos(radians(degrees)), y: center.y + ringRadius * sin(radians(degrees)))
-    }
-    func arrowHead(at degrees: CGFloat, clockwise: Bool) {
-        let base = ringPoint(degrees)
-        let a = radians(degrees)
-        let tangent = clockwise ? CGVector(dx: sin(a), dy: -cos(a)) : CGVector(dx: -sin(a), dy: cos(a))
-        let normal = CGVector(dx: cos(a), dy: sin(a))
-        let length: CGFloat = 80, halfWidth: CGFloat = 50
-        let head = roundedPolygon([
-            CGPoint(x: base.x + tangent.dx * length, y: base.y + tangent.dy * length),
-            CGPoint(x: base.x + normal.dx * halfWidth, y: base.y + normal.dy * halfWidth),
-            CGPoint(x: base.x - normal.dx * halfWidth, y: base.y - normal.dy * halfWidth),
-        ], radius: 8)
-        ctx.addPath(head)
-        ctx.fillPath()
-    }
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -6), blur: 16, color: color(0x000000, 0.25))
-    ctx.setStrokeColor(white)
-    ctx.setFillColor(white)
-    ctx.setLineWidth(40)
+    // 스킵 링: 위쪽 가운데가 열린 ↻ 하나
+    let ringRadius: CGFloat = 272
+    let blue = color(0x0A84FF)
+    ctx.setStrokeColor(blue)
+    ctx.setFillColor(blue)
+    ctx.setLineWidth(36)
     ctx.setLineCap(.round)
-    ctx.addArc(center: center, radius: ringRadius, startAngle: radians(100), endAngle: radians(235), clockwise: false)
+    let end: CGFloat = 118 - 360  // 62°에서 시계 방향으로 304° 회전
+    ctx.addArc(center: center, radius: ringRadius, startAngle: radians(62), endAngle: radians(end), clockwise: true)
     ctx.strokePath()
-    arrowHead(at: 235, clockwise: false)
-    ctx.addArc(center: center, radius: ringRadius, startAngle: radians(80), endAngle: radians(-55), clockwise: true)
-    ctx.strokePath()
-    arrowHead(at: -55, clockwise: true)
-
-    // 가운데 재생 삼각형 (시각적 중심을 위해 오른쪽으로 살짝 이동)
+    let a = radians(end)
+    let base = CGPoint(x: center.x + ringRadius * cos(a), y: center.y + ringRadius * sin(a))
+    let tangent = CGVector(dx: sin(a), dy: -cos(a)), normal = CGVector(dx: cos(a), dy: sin(a))
+    let length: CGFloat = 74, halfWidth: CGFloat = 48
     ctx.addPath(roundedPolygon([
-        CGPoint(x: 650, y: 512), CGPoint(x: 470, y: 407), CGPoint(x: 470, y: 617),
-    ], radius: 26))
+        CGPoint(x: base.x + tangent.dx * length, y: base.y + tangent.dy * length),
+        CGPoint(x: base.x + normal.dx * halfWidth, y: base.y + normal.dy * halfWidth),
+        CGPoint(x: base.x - normal.dx * halfWidth, y: base.y - normal.dy * halfWidth),
+    ], radius: 6))
     ctx.fillPath()
 
-    // 양쪽 "5" (5초 스킵)
-    let font = NSFont.systemFont(ofSize: 120, weight: .heavy)
-    let rounded = NSFont(descriptor: font.fontDescriptor.withDesign(.rounded) ?? font.fontDescriptor, size: 120) ?? font
-    for x: CGFloat in [300, 724] {
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: "5", attributes: [
-            .font: rounded, .foregroundColor: NSColor(cgColor: white)!,
-        ]))
-        let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
-        ctx.textPosition = CGPoint(x: x - bounds.midX, y: center.y - bounds.midY)
-        CTLineDraw(line, ctx)
+    // 재생 삼각형: 무게중심을 정중앙에 (광학적 중앙 정렬)
+    let triangle = [0, 120, 240].map { degrees in
+        CGPoint(x: center.x + 150 * cos(radians(CGFloat(degrees))), y: center.y + 150 * sin(radians(CGFloat(degrees))))
     }
-    ctx.restoreGState()
+    ctx.addPath(roundedPolygon(triangle, radius: 30))
+    ctx.setFillColor(color(0x1C1C1E))
+    ctx.fillPath()
 
     return ctx.makeImage()!
 }
