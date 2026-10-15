@@ -29,6 +29,15 @@ func makeMainMenu() -> NSMenu {
     fileItem.submenu = fileMenu
     mainMenu.addItem(fileItem)
 
+    // QuickTime과 같은 View > Enter Full Screen (⌃⌘F). 제목은 NSWindow가 Enter/Exit로 바꿔준다.
+    let viewItem = NSMenuItem()
+    let viewMenu = NSMenu(title: "View")
+    let fullScreenItem = viewMenu.addItem(withTitle: "Enter Full Screen",
+                                          action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+    fullScreenItem.keyEquivalentModifierMask = [.command, .control]
+    viewItem.submenu = viewMenu
+    mainMenu.addItem(viewItem)
+
     let windowItem = NSMenuItem()
     let windowMenu = NSMenu(title: "Window")
     windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")

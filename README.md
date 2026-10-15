@@ -17,6 +17,7 @@ shortcuts people expect from YouTube or VLC.
 | ← / → | Skip back / forward 5 seconds (stops at the start and end) |
 | ↑ / ↓ | Volume up / down by 10% |
 | Space | Play / pause (restarts from the beginning when at the end) |
+| ⌃⌘F or 🌐F | Enter / exit full screen |
 | ⌘O | Open a video |
 | ⌘W | Close the window |
 
