@@ -1,11 +1,12 @@
 #!/bin/zsh
-# SwiftPM으로 빌드한 실행 파일을 SkipPlayer.app 번들로 묶고,
+# SwiftPM으로 빌드한 Universal(Apple Silicon + Intel) 실행 파일을 SkipPlayer.app 번들로 묶고,
 # App Sandbox + Hardened Runtime으로 ad-hoc 서명한다.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/SkipPlayer"
+ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}"
+BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/SkipPlayer"
 
 APP=SkipPlayer.app
 rm -rf "$APP"
