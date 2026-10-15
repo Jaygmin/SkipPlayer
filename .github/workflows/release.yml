@@ -1,0 +1,35 @@
+# 버전 태그(v*)를 push하면 Universal SkipPlayer.dmg를 빌드하고,
+# 빌드 출처 증명(attestation)을 서명한 뒤 GitHub Release에 첨부한다.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write      # GitHub Release 생성
+      id-token: write      # Sigstore 서명용 OIDC 토큰
+      attestations: write  # 빌드 출처 증명 저장
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build DMG
+        run: ./make-dmg.sh
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: SkipPlayer.dmg
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" SkipPlayer.dmg --repo "$GITHUB_REPOSITORY" --title "SkipPlayer $TAG" --generate-notes
